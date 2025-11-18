@@ -52,6 +52,7 @@ const Journey = () => {
   const navigate = useNavigate();
   const socketRef = useRef<Socket | null>(null);
   const watchIdRef = useRef<number | null>(null);
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
   const [liveLocation, setLiveLocation] = useState<[number, number] | null>(null);
   const [route, setRoute] = useState<{ geometry: string; steps: RouteStep[] } | null>(null);
@@ -89,7 +90,7 @@ const Journey = () => {
         }
       }
 
-      socketRef.current = io('http://localhost:3000');
+      socketRef.current = io(API_BASE_URL);
       socketRef.current.on('connect', () => {
         console.log('Connected to WebSocket server');
         socketRef.current?.emit('joinJourney', slug);

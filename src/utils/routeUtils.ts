@@ -7,6 +7,8 @@ interface Coordinates {
   lon: number;
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 /**
  * Fetches the driving route between two points by calling our secure backend proxy.
  * @param startCoords The starting coordinates.
@@ -15,7 +17,7 @@ interface Coordinates {
  */
 export const fetchRoute = async (startCoords: Coordinates, endCoords: Coordinates): Promise<any> => {
   // Construct the URL to our NestJS backend endpoint
-  const backendUrl = new URL('http://localhost:3000/location/route');
+  const backendUrl = new URL(`${API_BASE_URL}/location/route`);
   
   // Append coordinates as query parameters
   backendUrl.searchParams.append('startLat', String(startCoords.lat));

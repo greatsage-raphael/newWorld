@@ -47,6 +47,7 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({ isOpen, onClo
   const [isLoading, setIsLoading] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<LocationSuggestion | null>(null);
   const [mapState, setMapState] = useState({ center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM });
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
   useEffect(() => {
     // Don't search for very short queries
@@ -59,7 +60,7 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({ isOpen, onClo
       setIsLoading(true);
       try {
         // UPDATED: Call the new NestJS backend endpoint
-        const backendUrl = `http://localhost:3000/location/search?query=${encodeURIComponent(query)}`;
+        const backendUrl = `${API_BASE_URL}/location/search?query=${encodeURIComponent(query)}`;
         const response = await fetch(backendUrl);
         
         if (!response.ok) {
