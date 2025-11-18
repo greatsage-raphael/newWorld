@@ -1,10 +1,10 @@
 // src/pages/Offloading.tsx
 
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Json } from '@/integrations/supabase/types'; // Import the Json type
+import { Json } from '@/integrations/supabase/types';
 import { toast } from '@/hooks/use-toast';
 import { uploadImageToStorage } from '@/utils/imageUpload';
 import { calculateDistance } from '@/utils/distanceUtils';
@@ -19,20 +19,11 @@ import TimeDisplay from '@/components/offloading/TimeDisplay';
 import RouteMap from '@/components/offloading/RouteMap';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { PlayCircle, StopCircle } from 'lucide-react';
+import { PlayCircle } from 'lucide-react';
 
 // --- TYPE DEFINITIONS ---
-
 interface LocationData {
-  address: {
-    state?: string;
-    country?: string;
-    village?: string;
-    country_code?: string;
-    'ISO3166-2-lvl3'?: string;
-    'ISO3166-2-lvl4'?: string;
-    [key: string]: string | undefined;
-  };
+  address: { [key: string]: string | undefined };
   coordinates: string;
   displayName: string;
   [key: string]: any;
@@ -44,13 +35,12 @@ interface Coordinates {
 }
 
 // --- COMPONENT ---
-
 const Offloading = () => {
-  const { slug } = useParams();
+  const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // State for the confirmation process
+  // State for the FINAL confirmation process
   const [isConfirming, setIsConfirming] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
@@ -59,32 +49,22 @@ const Offloading = () => {
   const [calculatedDistance, setCalculatedDistance] = useState<number>(0);
   const [timeTaken, setTimeTaken] = useState<number>(0);
 
-  // State for the route map
+  // State for the route map PREVIEW
   const [routeGeometry, setRouteGeometry] = useState<string | null>(null);
   const [routeCoords, setRouteCoords] = useState<{ start: Coordinates, end: Coordinates } | null>(null);
-
-  // State for live journey tracking
-  const [isJourneyStarted, setIsJourneyStarted] = useState(false);
-  const [liveLocation, setLiveLocation] = useState<[number, number] | null>(null);
-  const watchIdRef = useRef<number | null>(null);
 
   // Fetch the initial loading charge data
   const { data: loadingcharge, isLoading, error } = useQuery({
     queryKey: ['loading-charge', slug],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('loading_charge')
-        .select('*')
-        .eq('transaction_uuid', slug)
-        .single();
-      if (error) throw new Error('Failed to fetch loading charge');
+      const { data, error } = await supabase.from('loading_charge').select('*').eq('transaction_uuid', slug).single();
+      if (error) throw new Error('Failed to fetch loading charge details.');
       return data;
     },
-    enabled: !!slug
+    enabled: !!slug,
   });
 
   // --- HELPER FUNCTIONS ---
-
   const parseCoords = (location: any): Coordinates | null => {
     if (!location) return null;
     try {
@@ -93,92 +73,33 @@ const Offloading = () => {
         return { lat, lon };
       }
       if (location.lat && location.lon) { // From LocationIQ/database format
-        return { lat: parseFloat(location.lat), lon: parseFloat(location.lon) };
+        const { lat, lon } = JSON.parse(JSON.stringify(location));
+        return { lat: parseFloat(lat), lon: parseFloat(lon) };
       }
     } catch (e) {
-      console.error("Could not parse coordinates from location object:", location);
+      console.error("Could not parse coordinates from location object:", location, e);
     }
     return null;
-  };
-
-  const getCoordinatesFromLocation = (location: any): string | null => {
-    if (typeof location === 'object' && location?.coordinates) {
-      return location.coordinates;
-    }
-    return null;
-  };
-
-  const parseLoadingLocationData = (location: any): LocationData | null => {
-    if (!location || typeof location !== 'object') return null;
-    try {
-      return {
-        address: location.address || {},
-        coordinates: location.coordinates || '',
-        displayName: location.displayName || ''
-      };
-    } catch (e) {
-      console.error('Error parsing location data:', e);
-      return null;
-    }
-  };
-
-  // --- JOURNEY TRACKING HANDLERS ---
-
-  const handleStartJourney = () => {
-    if (!navigator.geolocation) {
-      toast({ title: "Error", description: "Geolocation is not supported.", variant: "destructive" });
-      return;
-    }
-
-    setIsJourneyStarted(true);
-    toast({ title: "Journey Started", description: "Live location tracking is active." });
-
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        setLiveLocation([latitude, longitude]);
-      },
-      (error) => {
-        console.error("Geolocation watch error:", error);
-        toast({ title: "Location Error", description: "Could not get live location. Tracking stopped.", variant: "destructive" });
-        handleStopJourney();
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-  };
-
-  const handleStopJourney = () => {
-    if (watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
-    setIsJourneyStarted(false);
-    toast({ title: "Journey Stopped", description: "Live location tracking has been turned off." });
   };
 
   // --- EFFECTS ---
 
-  // Cleanup effect to stop tracking if the user navigates away
-  useEffect(() => {
-    return () => {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
-    };
-  }, []);
-
   // Effect to calculate distance when offloading location is captured
   useEffect(() => {
     if (currentLocation && loadingcharge?.location) {
-      const loadingCoordinates = getCoordinatesFromLocation(loadingcharge.location);
-      if (loadingCoordinates) {
-        const distance = calculateDistance(loadingCoordinates, currentLocation.coordinates);
+      const startCoords = parseCoords(loadingcharge.location);
+      const endCoords = parseCoords(currentLocation);
+      if (startCoords && endCoords) {
+        const distance = calculateDistance(
+          `${startCoords.lat}, ${startCoords.lon}`,
+          `${endCoords.lat}, ${endCoords.lon}`
+        );
         setCalculatedDistance(distance);
       }
     }
   }, [currentLocation, loadingcharge?.location]);
 
-  // Effect to fetch the route when loading charge data is available
+  // Effect to fetch the route for the preview map
   useEffect(() => {
     if (loadingcharge && loadingcharge.location && loadingcharge.offloading_destination) {
       const start = parseCoords(loadingcharge.location);
@@ -187,14 +108,17 @@ const Offloading = () => {
       if (start && end) {
         setRouteCoords({ start, end });
         fetchRoute(start, end)
-          .then(geometry => setRouteGeometry(geometry))
-          .catch(err => console.error("Failed to fetch route geometry:", err));
+          .then(routeData => {
+            if (routeData.routes && routeData.routes.length > 0) {
+              setRouteGeometry(routeData.routes[0].geometry);
+            }
+          })
+          .catch(err => console.error("Failed to fetch route geometry for preview:", err));
       }
     }
   }, [loadingcharge]);
 
-  // --- MUTATION for CONFIRMATION ---
-
+  // --- MUTATION for FINAL CONFIRMATION ---
   const confirmReceiptMutation = useMutation({
     mutationFn: async () => {
       if (!slug) throw new Error('No transaction UUID provided');
@@ -212,17 +136,11 @@ const Offloading = () => {
         offloading_location: currentLocation as Json,
         offloading_photo: offloadingPhotoUrl,
         distance_travelled: calculatedDistance,
-        time_taken: timeTaken
+        time_taken: timeTaken,
       };
 
-      const { data, error } = await supabase
-        .from('loading_charge')
-        .update(updateData)
-        .eq('transaction_uuid', slug)
-        .select();
-
+      const { data, error } = await supabase.from('loading_charge').update(updateData).eq('transaction_uuid', slug).select();
       if (error) throw new Error(`Failed to confirm receipt: ${error.message}`);
-      if (!data || data.length === 0) throw new Error('Update failed - no rows were updated.');
       return data;
     },
     onSuccess: () => {
@@ -231,9 +149,11 @@ const Offloading = () => {
       queryClient.invalidateQueries({ queryKey: ['loading-charges'] });
       navigate('/transit');
     },
-    onError: (error) => {
-      toast({ title: "Error", description: `Failed to confirm loading charge: ${error.message}`, variant: "destructive" });
+    onError: (err) => {
+      const error = err as Error;
+      toast({ title: "Error", description: `Failed to confirm: ${error.message}`, variant: "destructive" });
       setIsConfirming(false);
+      setIsUploadingImage(false);
     }
   });
 
@@ -249,16 +169,12 @@ const Offloading = () => {
   const handleBackClick = () => navigate('/transit');
 
   // --- RENDER LOGIC ---
-
-  const isFormComplete = !!(currentLocation && capturedPhoto);
-  const isCompleted = loadingcharge?.status === 'completed';
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-900 mx-auto"></div>
-          <p className="mt-4 text-blue-900">Loading charge details...</p>
+          <p className="mt-4 text-blue-900">Loading Mission Details...</p>
         </div>
       </div>
     );
@@ -268,58 +184,48 @@ const Offloading = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 flex items-center justify-center">
         <div className="text-center p-4">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Loading charge Not Found</h2>
+          <h2 className="text-2xl font-bold text-red-600 mb-4">Charge Not Found</h2>
           <p className="text-gray-600 mb-4">The requested loading charge could not be found.</p>
           <Button onClick={handleBackClick}>Back to Transit</Button>
         </div>
       </div>
     );
   }
-
-  const loadingLocationData = parseLoadingLocationData(loadingcharge?.location);
+  
+  const isFormComplete = !!(currentLocation && capturedPhoto);
+  const isCompleted = loadingcharge?.status === 'completed';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 pb-10">
       <OffloadingHeader onBackClick={handleBackClick} />
 
       <div className="max-w-4xl mx-auto p-6 space-y-6">
         <LoadingchargeDetails loadingcharge={loadingcharge} isCompleted={isCompleted} />
 
-        {/* Planned Route Map and Journey Controls */}
-        {routeGeometry && routeCoords && !isCompleted && (
-          <>
-            <RouteMap
-              startCoords={routeCoords.start}
-              endCoords={routeCoords.end}
-              routeGeometry={routeGeometry}
-              liveLocation={liveLocation}
-            />
-            <Card>
-              <CardContent className="pt-6 flex justify-center">
-                {!isJourneyStarted ? (
-                  <Button
-                    onClick={handleStartJourney}
-                    className="bg-green-600 hover:bg-green-700 text-lg py-6 px-8"
-                  >
-                    <PlayCircle className="h-5 w-5 mr-2" />
-                    Start Journey
+        {/* Journey Start Section (only for active trips) */}
+        {!isCompleted && routeGeometry && routeCoords && (
+          <Card className="border-l-4 border-l-green-500">
+             <CardContent className="pt-6 space-y-4">
+              <h3 className="text-xl font-semibold text-green-900">Ready for Transit</h3>
+              <p className="text-gray-600">A route has been planned. Press the button below to begin live navigation and tracking.</p>
+              <RouteMap
+                startCoords={routeCoords.start}
+                endCoords={routeCoords.end}
+                routeGeometry={routeGeometry}
+              />
+              <div className="flex justify-center pt-4">
+                <Link to={`/journey/${slug}`}>
+                  <Button className="bg-green-600 hover:bg-green-700 text-lg py-6 px-8 rounded-full shadow-lg">
+                    <PlayCircle className="h-6 w-6 mr-3" />
+                    Start Journey & Navigation
                   </Button>
-                ) : (
-                  <Button
-                    onClick={handleStopJourney}
-                    variant="destructive"
-                    className="text-lg py-6 px-8"
-                  >
-                    <StopCircle className="h-5 w-5 mr-2" />
-                    Stop Journey
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          </>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
         )}
-
-        {/* Offloading Confirmation Steps */}
+        
+        {/* Offloading Confirmation Steps (only for active trips) */}
         {!isCompleted && (
           <>
             <LocationCapture
@@ -329,13 +235,9 @@ const Offloading = () => {
               onCapturingStateChange={setIsCapturingLocation}
               onTimeTakenCalculation={setTimeTaken}
               loadingchargeCreatedAt={loadingcharge.created_at}
-              loadingLocation={loadingLocationData}
             />
-
-            <DistanceDisplay distance={calculatedDistance} />
-
-            <TimeDisplay timeTaken={timeTaken} />
-
+            {calculatedDistance > 0 && <DistanceDisplay distance={calculatedDistance} />}
+            {timeTaken > 0 && <TimeDisplay timeTaken={timeTaken} />}
             <PhotoCapture
               capturedPhoto={capturedPhoto}
               onPhotoCapture={setCapturedPhoto}
@@ -343,7 +245,7 @@ const Offloading = () => {
           </>
         )}
 
-        {/* Final Confirmation Button */}
+        {/* Final Confirmation Button / Completed Status */}
         <ConfirmationSection
           isFormComplete={isFormComplete}
           isConfirming={isConfirming}

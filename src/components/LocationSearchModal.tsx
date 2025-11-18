@@ -1,4 +1,4 @@
-// src/components/LocationSearchModal.tsx
+// --- src/components/LocationSearchModal.tsx ---
 
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -8,15 +8,13 @@ import { Command, CommandEmpty, CommandItem, CommandList } from '@/components/ui
 import { toast } from '@/hooks/use-toast';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
-
-// --- LEAFLET ICON FIX ---
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 let DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
 // --- END ICON FIX ---
 
-const DEFAULT_CENTER: [number, number] = [0.3476, 32.5825];
+const DEFAULT_CENTER: [number, number] = [0.3476, 32.5825]; // Default to Kampala, Uganda
 const DEFAULT_ZOOM = 7;
 
 interface LocationSuggestion {
@@ -40,7 +38,8 @@ const MapUpdater: React.FC<{ center: [number, number]; zoom: number }> = ({ cent
   return null;
 };
 
-const API_KEY = import.meta.env.VITE_LOCATIONIQ_API_KEY;
+// REMOVED: No longer need the API Key on the frontend
+// const API_KEY = import.meta.env.VITE_LOCATIONIQ_API_KEY;
 
 const LocationSearchModal: React.FC<LocationSearchModalProps> = ({ isOpen, onClose, onSelectLocation }) => {
   const [query, setQuery] = useState('');
@@ -50,24 +49,34 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({ isOpen, onClo
   const [mapState, setMapState] = useState({ center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM });
 
   useEffect(() => {
+    // Don't search for very short queries
     if (query.trim().length < 3) {
       setSuggestions([]);
       return;
     }
+
     const fetchSuggestions = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch(`https://api.locationiq.com/v1/autocomplete?key=${API_KEY}&q=${encodeURIComponent(query)}&limit=5&normalizecity=1`);
-        if (!response.ok) throw new Error('Failed to fetch suggestions');
+        // UPDATED: Call the new NestJS backend endpoint
+        const backendUrl = `http://localhost:3000/location/search?query=${encodeURIComponent(query)}`;
+        const response = await fetch(backendUrl);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch suggestions from server');
+        }
+
         const data: LocationSuggestion[] = await response.json();
         setSuggestions(data);
       } catch (error) {
         console.error(error);
-        toast({ title: "Error", description: "Could not fetch locations.", variant: "destructive" });
+        toast({ title: "Error", description: "Could not fetch locations. Is the backend server running?", variant: "destructive" });
       } finally {
         setIsLoading(false);
       }
     };
+
+    // Debounce the API call to avoid spamming while typing
     const debounceTimer = setTimeout(fetchSuggestions, 300);
     return () => clearTimeout(debounceTimer);
   }, [query]);
@@ -76,7 +85,7 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({ isOpen, onClo
     const newCenter: [number, number] = [parseFloat(suggestion.lat), parseFloat(suggestion.lon)];
     setQuery(suggestion.display_name);
     setSelectedLocation(suggestion);
-    setSuggestions([]);
+    setSuggestions([]); // Hide suggestions after selection
     setMapState({ center: newCenter, zoom: 14 });
   };
 
@@ -92,6 +101,7 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({ isOpen, onClo
   };
 
   const handleClose = () => {
+    // Reset state when closing the modal
     setQuery('');
     setSuggestions([]);
     setSelectedLocation(null);
@@ -106,7 +116,6 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({ isOpen, onClo
           <DialogTitle>Search for Offloading Location</DialogTitle>
         </DialogHeader>
 
-        {/* This container will manage the layout with Flexbox */}
         <div className="px-6 flex-grow relative flex flex-col">
           
           {/* Search Bar and Suggestions Overlay */}
@@ -140,7 +149,7 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({ isOpen, onClo
             )}
           </div>
 
-          {/* Map Container - it will grow to fill available space */}
+          {/* Map Container */}
           <div className="flex-grow w-full rounded-lg overflow-hidden mt-4 border z-10">
             <MapContainer
               center={mapState.center}

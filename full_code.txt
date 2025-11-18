@@ -2985,6 +2985,47 @@ export default DistanceDisplay;
 
 
 // ======================================================
+// --- Content from: src/components/offloading/LiveLocationMarker.tsx
+// ======================================================
+
+// --- src/components/offloading/LiveLocationMarker.tsx ---
+
+import React, { useEffect, useRef } from 'react';
+import { Marker, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import { truckIcon } from './truck-icon';
+
+interface LiveLocationMarkerProps {
+  position: [number, number];
+}
+
+const LiveLocationMarker: React.FC<LiveLocationMarkerProps> = ({ position }) => {
+  const map = useMap();
+  const markerRef = useRef<L.Marker>(null);
+
+  useEffect(() => {
+    if (position) {
+      // Pan the map to the new location smoothly
+      map.flyTo(position, map.getZoom(), {
+        animate: true,
+        duration: 1.5,
+      });
+    }
+  }, [position, map]);
+
+  return (
+    <Marker
+      ref={markerRef}
+      position={position}
+      icon={truckIcon}
+      zIndexOffset={1000} // Ensure it's on top
+    />
+  );
+};
+
+export default LiveLocationMarker;
+
+// ======================================================
 // --- Content from: src/components/offloading/LoadingChargeDetails.tsx
 // ======================================================
 
@@ -3451,6 +3492,93 @@ export default PhotoCapture;
 
 
 // ======================================================
+// --- Content from: src/components/offloading/RouteMap.tsx
+// ======================================================
+
+// --- src/components/offloading/RouteMap.tsx ---
+
+import React, { useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import * as polyline from '@mapbox/polyline';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Map } from 'lucide-react';
+import LiveLocationMarker from './LiveLocationMarker'; // CHANGED: Import the new component
+
+// --- LEAFLET ICON FIX ---
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+let DefaultIcon = L.icon({ iconUrl: icon, shadowUrl: iconShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
+L.Marker.prototype.options.icon = DefaultIcon;
+// --- END ICON FIX ---
+
+interface Coordinates {
+  lat: number;
+  lon: number;
+}
+
+interface RouteMapProps {
+  startCoords: Coordinates;
+  endCoords: Coordinates;
+  routeGeometry: string;
+  liveLocation?: [number, number] | null; // CHANGED: Add optional prop for live location
+}
+
+// ... (FitBoundsUpdater component remains the same) ...
+const FitBoundsUpdater: React.FC<{ bounds: L.LatLngBoundsExpression }> = ({ bounds }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (bounds) {
+      map.fitBounds(bounds, { padding: [50, 50] });
+    }
+  }, [bounds, map]);
+  return null;
+};
+
+const RouteMap: React.FC<RouteMapProps> = ({ startCoords, endCoords, routeGeometry, liveLocation }) => { // CHANGED: Destructure new prop
+  const decodedRoute = polyline.decode(routeGeometry).map(point => [point[0], point[1]] as [number, number]);
+
+  const startPosition: [number, number] = [startCoords.lat, startCoords.lon];
+  const endPosition: [number, number] = [endCoords.lat, endCoords.lon];
+  const bounds = L.latLngBounds(decodedRoute);
+
+  return (
+    <Card className="border-l-4 border-l-purple-500">
+        <CardHeader>
+            <CardTitle className="text-xl text-purple-900 flex items-center gap-2">
+                <Map className="h-5 w-5" />
+                Planned Route
+            </CardTitle>
+        </CardHeader>
+        <CardContent>
+            <div className="h-96 w-full rounded-lg overflow-hidden border shadow-sm">
+                <MapContainer 
+                    bounds={bounds}
+                    scrollWheelZoom={true} 
+                    style={{ height: '100%', width: '100%' }}
+                >
+                    <TileLayer
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <Marker position={startPosition} title="Start Location" />
+                    <Marker position={endPosition} title="Destination" />
+                    <Polyline positions={decodedRoute} color="blue" weight={5} />
+                    
+                    {/* CHANGED: Conditionally render the live marker */}
+                    {liveLocation && <LiveLocationMarker position={liveLocation} />}
+
+                    {!liveLocation && <FitBoundsUpdater bounds={bounds} />}
+                </MapContainer>
+            </div>
+        </CardContent>
+    </Card>
+  );
+};
+
+export default RouteMap;
+
+// ======================================================
 // --- Content from: src/components/offloading/TimeDisplay.tsx
 // ======================================================
 
@@ -3502,6 +3630,36 @@ const TimeDisplay: React.FC<TimeDisplayProps> = ({ timeTaken }) => {
 };
 
 export default TimeDisplay;
+
+// ======================================================
+// --- Content from: src/components/offloading/truck-icon.ts
+// ======================================================
+
+// --- src/components/offloading/truck-icon.ts ---
+
+import L from 'leaflet';
+
+// Simple truck SVG icon encoded as a data URI
+const iconSvg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-truck">
+  <path d="M10 17h4V5H2v12h3"/>
+  <path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/>
+  <circle cx="7" cy="17" r="2"/>
+  <circle cx="17" cy="17" r="2"/>
+</svg>`;
+
+const encodedIcon = `data:image/svg+xml;base64,${btoa(iconSvg)}`;
+
+// A wrapper div to style the icon (e.g., circular background)
+const iconHtml = `<div style="background-color: #16a34a; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.5);">${iconSvg}</div>`;
+
+
+export const truckIcon = new L.DivIcon({
+  html: iconHtml,
+  className: '', // important to clear default styling
+  iconSize: [32, 32],
+  iconAnchor: [16, 16], // center of the icon
+});
 
 // ======================================================
 // --- Content from: src/components/ui/accordion.tsx
@@ -9176,6 +9334,7 @@ export type Database = {
           offloading_location: Json | null
           offloading_photo: string | null
           status: string
+          offloading_destination: Json | null
           time_taken: number | null
           transaction_id: number
           transaction_uuid: string
@@ -9196,6 +9355,7 @@ export type Database = {
           offloading_location?: Json | null
           offloading_photo?: string | null
           status?: string
+          offloading_destination?: Json | null 
           time_taken?: number | null
           transaction_id?: number
           transaction_uuid: string
@@ -9216,6 +9376,7 @@ export type Database = {
           offloading_location?: Json | null
           offloading_photo?: string | null
           status?: string
+          offloading_destination?: Json | null 
           time_taken?: number | null
           transaction_id?: number
           transaction_uuid?: string
@@ -9623,14 +9784,17 @@ export default NotFound;
 // --- Content from: src/pages/Offloading.tsx
 // ======================================================
 
+// src/pages/Offloading.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { Json } from '@/integrations/supabase/types'; // Import the Json type
 import { toast } from '@/hooks/use-toast';
 import { uploadImageToStorage } from '@/utils/imageUpload';
 import { calculateDistance } from '@/utils/distanceUtils';
+import { fetchRoute } from '@/utils/routeUtils';
 import OffloadingHeader from '@/components/offloading/OffloadingHeader';
 import LoadingchargeDetails from '@/components/offloading/LoadingChargeDetails';
 import LocationCapture from '@/components/offloading/LocationCapture';
@@ -9638,6 +9802,12 @@ import PhotoCapture from '@/components/offloading/PhotoCapture';
 import ConfirmationSection from '@/components/offloading/ConfirmationSection';
 import DistanceDisplay from '@/components/offloading/DistanceDisplay';
 import TimeDisplay from '@/components/offloading/TimeDisplay';
+import RouteMap from '@/components/offloading/RouteMap';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { PlayCircle, StopCircle } from 'lucide-react';
+
+// --- TYPE DEFINITIONS ---
 
 interface LocationData {
   address: {
@@ -9647,15 +9817,26 @@ interface LocationData {
     country_code?: string;
     'ISO3166-2-lvl3'?: string;
     'ISO3166-2-lvl4'?: string;
+    [key: string]: string | undefined;
   };
   coordinates: string;
   displayName: string;
+  [key: string]: any;
 }
+
+interface Coordinates {
+  lat: number;
+  lon: number;
+}
+
+// --- COMPONENT ---
 
 const Offloading = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // State for the confirmation process
   const [isConfirming, setIsConfirming] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
@@ -9664,219 +9845,196 @@ const Offloading = () => {
   const [calculatedDistance, setCalculatedDistance] = useState<number>(0);
   const [timeTaken, setTimeTaken] = useState<number>(0);
 
+  // State for the route map
+  const [routeGeometry, setRouteGeometry] = useState<string | null>(null);
+  const [routeCoords, setRouteCoords] = useState<{ start: Coordinates, end: Coordinates } | null>(null);
+
+  // State for live journey tracking
+  const [isJourneyStarted, setIsJourneyStarted] = useState(false);
+  const [liveLocation, setLiveLocation] = useState<[number, number] | null>(null);
+  const watchIdRef = useRef<number | null>(null);
+
+  // Fetch the initial loading charge data
   const { data: loadingcharge, isLoading, error } = useQuery({
     queryKey: ['loading-charge', slug],
     queryFn: async () => {
-      console.log('Fetching loading charge for slug:', slug);
       const { data, error } = await supabase
         .from('loading_charge')
         .select('*')
         .eq('transaction_uuid', slug)
         .single();
-
-      if (error) {
-        console.error('Error fetching loading charge:', error);
-        throw new Error('Failed to fetch loading charge');
-      }
-
-      console.log('Loaded loading charge:', data);
+      if (error) throw new Error('Failed to fetch loading charge');
       return data;
     },
     enabled: !!slug
   });
 
-  // Calculate distance when current location changes
-  useEffect(() => {
-    if (currentLocation && loadingcharge?.location) {
-      const loadingCoordinates = getCoordinatesFromLocation(loadingcharge.location);
-      if (loadingCoordinates) {
-        const distance = calculateDistance(loadingCoordinates, currentLocation.coordinates);
-        setCalculatedDistance(distance);
-        console.log('Calculated distance:', distance, 'km');
-      }
-    }
-  }, [currentLocation, loadingcharge?.location]);
+  // --- HELPER FUNCTIONS ---
 
-  // Helper function to extract coordinates from location data
-  const getCoordinatesFromLocation = (location: any): string | null => {
-    if (typeof location === 'object' && location && location.coordinates) {
-      return location.coordinates;
-    }
-    if (typeof location === 'string') {
-      // Try to extract coordinates from string format
-      const coordMatch = location.match(/(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/);
-      if (coordMatch) {
-        return `${coordMatch[1]}, ${coordMatch[2]}`;
+  const parseCoords = (location: any): Coordinates | null => {
+    if (!location) return null;
+    try {
+      if (location.coordinates) { // From our custom LocationData format
+        const [lat, lon] = location.coordinates.split(',').map(parseFloat);
+        return { lat, lon };
       }
+      if (location.lat && location.lon) { // From LocationIQ/database format
+        return { lat: parseFloat(location.lat), lon: parseFloat(location.lon) };
+      }
+    } catch (e) {
+      console.error("Could not parse coordinates from location object:", location);
     }
     return null;
   };
 
-  // Helper function to safely parse loading location data from Json type
-  const parseLoadingLocationData = (location: any): LocationData | null => {
-    if (!location || typeof location !== 'object') {
-      return null;
+  const getCoordinatesFromLocation = (location: any): string | null => {
+    if (typeof location === 'object' && location?.coordinates) {
+      return location.coordinates;
     }
-    
+    return null;
+  };
+
+  const parseLoadingLocationData = (location: any): LocationData | null => {
+    if (!location || typeof location !== 'object') return null;
     try {
       return {
         address: location.address || {},
         coordinates: location.coordinates || '',
         displayName: location.displayName || ''
       };
-    } catch (error) {
-      console.error('Error parsing location data:', error);
+    } catch (e) {
+      console.error('Error parsing location data:', e);
       return null;
     }
   };
 
+  // --- JOURNEY TRACKING HANDLERS ---
+
+  const handleStartJourney = () => {
+    if (!navigator.geolocation) {
+      toast({ title: "Error", description: "Geolocation is not supported.", variant: "destructive" });
+      return;
+    }
+
+    setIsJourneyStarted(true);
+    toast({ title: "Journey Started", description: "Live location tracking is active." });
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setLiveLocation([latitude, longitude]);
+      },
+      (error) => {
+        console.error("Geolocation watch error:", error);
+        toast({ title: "Location Error", description: "Could not get live location. Tracking stopped.", variant: "destructive" });
+        handleStopJourney();
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  const handleStopJourney = () => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    setIsJourneyStarted(false);
+    toast({ title: "Journey Stopped", description: "Live location tracking has been turned off." });
+  };
+
+  // --- EFFECTS ---
+
+  // Cleanup effect to stop tracking if the user navigates away
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, []);
+
+  // Effect to calculate distance when offloading location is captured
+  useEffect(() => {
+    if (currentLocation && loadingcharge?.location) {
+      const loadingCoordinates = getCoordinatesFromLocation(loadingcharge.location);
+      if (loadingCoordinates) {
+        const distance = calculateDistance(loadingCoordinates, currentLocation.coordinates);
+        setCalculatedDistance(distance);
+      }
+    }
+  }, [currentLocation, loadingcharge?.location]);
+
+  // Effect to fetch the route when loading charge data is available
+  useEffect(() => {
+    if (loadingcharge && loadingcharge.location && loadingcharge.offloading_destination) {
+      const start = parseCoords(loadingcharge.location);
+      const end = parseCoords(loadingcharge.offloading_destination);
+
+      if (start && end) {
+        setRouteCoords({ start, end });
+        fetchRoute(start, end)
+          .then(geometry => setRouteGeometry(geometry))
+          .catch(err => console.error("Failed to fetch route geometry:", err));
+      }
+    }
+  }, [loadingcharge]);
+
+  // --- MUTATION for CONFIRMATION ---
+
   const confirmReceiptMutation = useMutation({
     mutationFn: async () => {
-      console.log('Starting mutation with data:', { 
-        currentLocation, 
-        capturedPhoto: capturedPhoto ? `${capturedPhoto.substring(0, 50)}...` : null,
-        calculatedDistance,
-        slug 
-      });
-      
-      if (!slug) {
-        throw new Error('No transaction UUID provided');
-      }
-      
-      let offloadingPhotoUrl: string | null = null;
+      if (!slug) throw new Error('No transaction UUID provided');
 
-      // Upload image to storage first if we have one
+      let offloadingPhotoUrl: string | null = null;
       if (capturedPhoto) {
         setIsUploadingImage(true);
-        toast({
-          title: "Uploading Photo",
-          description: "Uploading offloading photo to storage..."
-        });
-
-        try {
-          const fileName = `${slug}_offloading_${Date.now()}.jpg`;
-          console.log('Starting photo upload with filename:', fileName);
-          offloadingPhotoUrl = await uploadImageToStorage(capturedPhoto, fileName);
-          console.log('Photo upload successful:', offloadingPhotoUrl);
-          
-          toast({
-            title: "Photo Upload Success",
-            description: "Photo uploaded successfully!"
-          });
-        } catch (error) {
-          console.error('Photo upload failed:', error);
-          toast({
-            title: "Photo Upload Failed",
-            description: "Failed to upload photo, but confirmation will still proceed.",
-            variant: "destructive"
-          });
-        } finally {
-          setIsUploadingImage(false);
-        }
+        const fileName = `${slug}_offloading_${Date.now()}.jpg`;
+        offloadingPhotoUrl = await uploadImageToStorage(capturedPhoto, fileName);
+        setIsUploadingImage(false);
       }
-      
-      // Convert LocationData to Json format for database storage
-      const locationForDatabase = currentLocation ? {
-        address: currentLocation.address,
-        coordinates: currentLocation.coordinates,
-        displayName: currentLocation.displayName
-      } : null;
-      
+
       const updateData = {
         status: 'completed',
-        offloading_location: locationForDatabase,
+        offloading_location: currentLocation as Json,
         offloading_photo: offloadingPhotoUrl,
         distance_travelled: calculatedDistance,
         time_taken: timeTaken
       };
-      
-      console.log('Preparing database update with data:', {
-        ...updateData,
-        offloading_photo: offloadingPhotoUrl ? `${offloadingPhotoUrl.substring(0, 50)}...` : null
-      });
-      
-      // First, let's verify the record exists and get its current state
-      const { data: existingRecord, error: fetchError } = await supabase
-        .from('loading_charge')
-        .select('transaction_id, transaction_uuid, status, user_id')
-        .eq('transaction_uuid', slug)
-        .single();
-        
-      if (fetchError) {
-        console.error('Error fetching record for verification:', fetchError);
-        throw new Error(`Record verification failed: ${fetchError.message}`);
-      }
-      
-      console.log('Existing record verified:', existingRecord);
-      
-      // Now perform the update with detailed logging
-      console.log('Executing database update for UUID:', slug);
+
       const { data, error } = await supabase
         .from('loading_charge')
         .update(updateData)
         .eq('transaction_uuid', slug)
         .select();
 
-      if (error) {
-        console.error('Database update error:', error);
-        throw new Error(`Failed to confirm receipt: ${error.message}`);
-      }
-
-      console.log('Database update result:', data);
-      
-      if (!data || data.length === 0) {
-        console.error('Update returned no rows - this suggests the record was not found or not updated');
-        console.error('Search UUID:', slug);
-        console.error('Existing record UUID:', existingRecord?.transaction_uuid);
-        throw new Error('Update failed - no rows were updated. Please check if the record exists.');
-      }
-      
-      console.log('Update successful, rows affected:', data.length);
+      if (error) throw new Error(`Failed to confirm receipt: ${error.message}`);
+      if (!data || data.length === 0) throw new Error('Update failed - no rows were updated.');
       return data;
     },
-    onSuccess: (data) => {
-      console.log('Mutation success:', data);
-      toast({
-        title: "Success",
-        description: "Loading charge confirmed successfully!",
-      });
+    onSuccess: () => {
+      toast({ title: "Success", description: "Loading charge confirmed successfully!" });
       queryClient.invalidateQueries({ queryKey: ['loading-charge', slug] });
       queryClient.invalidateQueries({ queryKey: ['loading-charges'] });
       navigate('/transit');
     },
     onError: (error) => {
-      console.error('Mutation error:', error);
-      toast({
-        title: "Error",
-        description: `Failed to confirm loading charge: ${error.message}`,
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: `Failed to confirm loading charge: ${error.message}`, variant: "destructive" });
       setIsConfirming(false);
     }
   });
 
   const handleConfirmReceipt = () => {
-    console.log('Confirm receipt clicked');
-    console.log('Current location:', currentLocation);
-    console.log('Captured photo length:', capturedPhoto?.length);
-    
     if (!currentLocation || !capturedPhoto) {
-      console.log('Missing required data - location:', !!currentLocation, 'photo:', !!capturedPhoto);
-      toast({
-        title: "Error",
-        description: "Please capture both location and photo before confirming.",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: "Please capture location and photo before confirming.", variant: "destructive" });
       return;
     }
-    
     setIsConfirming(true);
     confirmReceiptMutation.mutate();
   };
 
-  const handleBackClick = () => {
-    navigate('/transit');
-  };
+  const handleBackClick = () => navigate('/transit');
+
+  // --- RENDER LOGIC ---
 
   const isFormComplete = !!(currentLocation && capturedPhoto);
   const isCompleted = loadingcharge?.status === 'completed';
@@ -9895,16 +10053,15 @@ const Offloading = () => {
   if (error || !loadingcharge) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center p-4">
           <h2 className="text-2xl font-bold text-red-600 mb-4">Loading charge Not Found</h2>
           <p className="text-gray-600 mb-4">The requested loading charge could not be found.</p>
-          <OffloadingHeader onBackClick={handleBackClick} />
+          <Button onClick={handleBackClick}>Back to Transit</Button>
         </div>
       </div>
     );
   }
 
-  // Extract loading location for distance calculation using the helper function
   const loadingLocationData = parseLoadingLocationData(loadingcharge?.location);
 
   return (
@@ -9914,6 +10071,41 @@ const Offloading = () => {
       <div className="max-w-4xl mx-auto p-6 space-y-6">
         <LoadingchargeDetails loadingcharge={loadingcharge} isCompleted={isCompleted} />
 
+        {/* Planned Route Map and Journey Controls */}
+        {routeGeometry && routeCoords && !isCompleted && (
+          <>
+            <RouteMap
+              startCoords={routeCoords.start}
+              endCoords={routeCoords.end}
+              routeGeometry={routeGeometry}
+              liveLocation={liveLocation}
+            />
+            <Card>
+              <CardContent className="pt-6 flex justify-center">
+                {!isJourneyStarted ? (
+                  <Button
+                    onClick={handleStartJourney}
+                    className="bg-green-600 hover:bg-green-700 text-lg py-6 px-8"
+                  >
+                    <PlayCircle className="h-5 w-5 mr-2" />
+                    Start Journey
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleStopJourney}
+                    variant="destructive"
+                    className="text-lg py-6 px-8"
+                  >
+                    <StopCircle className="h-5 w-5 mr-2" />
+                    Stop Journey
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        {/* Offloading Confirmation Steps */}
         {!isCompleted && (
           <>
             <LocationCapture
@@ -9937,6 +10129,7 @@ const Offloading = () => {
           </>
         )}
 
+        {/* Final Confirmation Button */}
         <ConfirmationSection
           isFormComplete={isFormComplete}
           isConfirming={isConfirming}
@@ -9950,7 +10143,6 @@ const Offloading = () => {
 };
 
 export default Offloading;
-
 
 // ======================================================
 // --- Content from: src/pages/Transit.tsx
@@ -10486,6 +10678,65 @@ export const getCurrentLocation = (): Promise<LocationData | null> => {
   });
 };
 
+
+// ======================================================
+// --- Content from: src/utils/routeUtils.ts
+// ======================================================
+
+// --- src/utils/routeUtils.ts ---
+
+import { toast } from "@/hooks/use-toast";
+
+const API_KEY = import.meta.env.VITE_LOCATIONIQ_API_KEY;
+
+interface Coordinates {
+  lat: number;
+  lon: number;
+}
+
+/**
+ * Fetches the driving route between two points using the LocationIQ Directions API.
+ * @param startCoords The starting coordinates.
+ * @param endCoords The ending coordinates.
+ * @returns A promise that resolves to the encoded polyline geometry string.
+ */
+export const fetchRoute = async (startCoords: Coordinates, endCoords: Coordinates): Promise<string> => {
+  if (!API_KEY) {
+    console.error("LocationIQ API Key is missing.");
+    toast({
+      title: "Configuration Error",
+      description: "Location service is not configured.",
+      variant: "destructive",
+    });
+    throw new Error("API key is missing");
+  }
+
+  // LocationIQ expects coordinates in {longitude},{latitude} format
+  const coordinatesString = `${startCoords.lon},${startCoords.lat};${endCoords.lon},${endCoords.lat}`;
+
+  const url = `https://us1.locationiq.com/v1/directions/driving/${coordinatesString}?key=${API_KEY}&steps=false&geometries=polyline&overview=full`;
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
+      console.error("No route found:", data);
+      throw new Error(data.message || "No route could be found between the specified points.");
+    }
+
+    // Return the encoded geometry of the first route
+    return data.routes[0].geometry;
+  } catch (error) {
+    console.error("Error fetching route from LocationIQ:", error);
+    toast({
+      title: "Routing Error",
+      description: "Could not fetch the route map. Please check your connection.",
+      variant: "destructive",
+    });
+    throw error;
+  }
+};
 
 // ======================================================
 // --- Content from: src/vite-env.d.ts

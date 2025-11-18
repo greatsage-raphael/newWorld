@@ -16,6 +16,7 @@ import ProtectedAdminRoute from "./components/ProtectedAdminRoute";
 import ProtectedSuperAdminRoute from "./components/ProtectedSuperAdminRoute";
 import ProtectedRoute from "./components/ProtectedRoute";
 import NotFound from "./pages/NotFound";
+import Journey from "./pages/Journey";
 
 const queryClient = new QueryClient();
 
@@ -40,6 +41,14 @@ const App = () => (
             element={
               <ProtectedRoute>
                 <Offloading />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/journey/:slug" 
+            element={
+              <ProtectedRoute>
+                <Journey />
               </ProtectedRoute>
             } 
           />
