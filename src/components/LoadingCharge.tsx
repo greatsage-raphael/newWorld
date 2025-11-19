@@ -3,19 +3,19 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input'; // Import Input
-import { Label } from '@/components/ui/label'; // Import Label
-import { toast } from '@/hooks/use-toast';
-import { Truck, Hash, MapPin as MapPinIcon } from 'lucide-react'; // Added MapPinIcon
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Truck, Hash, MapPin as MapPinIcon } from 'lucide-react';
 import { useLoadingchargeForm } from '@/hooks/useLoadingChargeForm';
 import DriverInfoSection from '@/components/loading-charge/DriverInfoSection';
 import LoadingDetailsSection from '@/components/loading-charge/LoadingDetailsSection';
 import LocationSection from '@/components/loading-charge/LocationSection';
 import PhotoSection from '@/components/loading-charge/PhotoSection';
-import LocationSearchModal from '@/components/LocationSearchModal'; // Import the new modal
+import LocationSearchModal from '@/components/LocationSearchModal';
 import LocationMap from './LocationMap';
 
 const Loadingcharge = () => {
+  // All state and logic are now neatly encapsulated in this custom hook.
   const {
     formData,
     setFormData,
@@ -31,6 +31,7 @@ const Loadingcharge = () => {
     setCapturedPhoto,
     createLoadingchargeMutation,
     handleInputChange,
+    handleSubmit, // We get the new submit handler from the hook.
     user,
     isSignedIn,
     truckDrivers,
@@ -41,36 +42,14 @@ const Loadingcharge = () => {
     isChainageLocked,
     isNetMassLocked,
     isTransactionIdEditable,
-    isLocationModalOpen, // Get modal state
-    setLocationModalOpen, // Get function to update modal state
+    isLocationModalOpen,
+    setLocationModalOpen,
   } = useLoadingchargeForm();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!isSignedIn || !user) {
-      toast({ title: "Authentication Required", description: "Please sign in to create a loading charge.", variant: "destructive" });
-      return;
-    }
+  // No separate 'handleSubmit' function is needed here anymore.
 
-    if (!formData.driver_name || !formData.vehicle_number || !formData.loading_chainage.trim() || !netMassValue.trim() || !formData.material) {
-      toast({ title: "Validation Error", description: "Please fill in all required fields.", variant: "destructive" });
-      return;
-    }
-
-    if (isTransactionIdEditable && !formData.custom_transaction_id) {
-       toast({ title: "Validation Error", description: "Please enter a Transaction ID for the selected material.", variant: "destructive" });
-       return;
-    }
-
-    if (!capturedPhoto) {
-      toast({ title: "Validation Error", description: "Please capture a truck photo before submitting.", variant: "destructive" });
-      return;
-    }
-
-    createLoadingchargeMutation.mutate(formData);
-  };
-
+  // If the user is not signed in, we render nothing,
+  // letting the parent component (Index.tsx) handle the signed-out UI.
   if (!isSignedIn) {
     return null;
   }
@@ -92,6 +71,7 @@ const Loadingcharge = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {/* The form's onSubmit now correctly points to the handler from the hook. */}
               <form onSubmit={handleSubmit} className="space-y-8">
                 
                 <DriverInfoSection
@@ -116,7 +96,7 @@ const Loadingcharge = () => {
                   isTransactionIdEditable={isTransactionIdEditable}
                 />
 
-                {/* New Offloading Location Section */}
+                {/* Offloading Location Section */}
                 <div>
                   <h3 className="text-lg font-semibold text-blue-900 mb-4 flex items-center gap-2">
                     <MapPinIcon className="h-5 w-5" />
@@ -137,7 +117,6 @@ const Loadingcharge = () => {
                       />
                     </div>
                     
-                    {/* CONDITIONALLY RENDER THE MAP HERE */}
                     {formData.offloading_destination?.lat && formData.offloading_destination?.lon && (
                       <LocationMap
                         lat={parseFloat(formData.offloading_destination.lat)}
@@ -177,7 +156,7 @@ const Loadingcharge = () => {
         </div>
       </div>
       
-      {/* Render the modal */}
+      {/* Location Search Modal */}
       <LocationSearchModal
         isOpen={isLocationModalOpen}
         onClose={() => setLocationModalOpen(false)}
